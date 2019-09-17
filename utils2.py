@@ -237,11 +237,6 @@ def get_atom_symbol_bonds(drug_label, args):
     for i, x in enumerate(atoms):
         atom_dict[x] = i+1
 
-    """
-    for i, x in enumerate(bonds):
-        bond_dict[x] = i
-    """
-    ####
     bond_dict = {'SINGLE' : 1., 'AROMATIC' : 1.5, 'DOUBLE' : 2., 'TRIPLE' : 3}
        
 
@@ -483,10 +478,6 @@ def get_ppi_features(gene_info, args):
 
     g2v_embedding = np.vstack([gene2vecdict[x] for x in common_symbols])
 
-    """
-    row_desc = row_desc.loc[[x for x in row_desc.index if order2id_dict[x] in gene_info.index]].reset_index()
-    get_gex_idxs = [x for x in row_desc.index if row_desc.loc[x, 'id'] in common_ids]
-    """
     get_gex_idxs = common_orders
 
     print(g2v_embedding.shape)
@@ -508,10 +499,7 @@ def To2class_pred(test_label, test_preds, test_probas):
     test_2class_labels = []
     test_2class_preds = []
     test_2class_probas = []
-    """
-    for i, x in enumerate(test_preds):
-        class2_proba = torch.softmax(torch.tensor([test_probas[i][0], test_probas[i][2]))
-    """
+    
     for i, x in enumerate(test_label):
         if x == 2:
             test_2class_labels.append(1)

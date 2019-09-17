@@ -601,10 +601,6 @@ def main(args):
             valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg = To2class_pred(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg)
             test_label, test_pred, test_proba = To2class_pred(test_label, test_pred, test_proba)
             test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg = To2class_pred(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg)
-            print('valid_label')
-            print(valid_label)
-            print('valid pred')
-            print(valid_pred)
 
             valid_avg_scores.append(Return_Scores(valid_label, valid_pred, valid_proba))
             valid_drug_scores.append(Return_Scores(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg))
@@ -676,41 +672,17 @@ def main(args):
         f.write("Total Drug Std\n")
         f.write(str(drug_std)+'\n\n')
 
-
-
-
-
-#   Construct Model
-#model = Model()
-#model = Resimnet()
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-#    parser.add_argument('--model', type = str, default = 'GEX_MLP')
-#    parser.add_argument('--model', type = str, default = 'GCN_GEX_MLP')
-#    parser.add_argument('--model', type = str, default = 'GCN_GEX_attn_MLP')
-#    parser.add_argument('--model', type = str, default = 'Resimnet_attn')
-#    parser.add_argument('--model', type = str, default = 'Resimnet')
-#    parser.add_argument('--model', type = str, default = 'GEX_drug_attn_MLP')
-#    parser.add_argument('--model', type = str, default = 'GEX_kegg_GAT_MLP')
     parser.add_argument('--model', type = str, default = 'GEX_PPI_GAT_cat4_MLP')
 
 
     parser.add_argument('--gex_feat', type = str, default = 'l1000')
-#    parser.add_argument('--gex_feat', type = str, default = 'ptgs_core')
-#    parser.add_argument('--gex_feat', type = str, default = 'ptgs_total')
-#    parser.add_argument('--gex_feat', type = str, default = 'total')
-
-
-#    parser.add_argument('--drug_feat', type = str, default = 'resimnet')
     parser.add_argument('--drug_feat', type = str, default = 'ecfp')
 
     parser.add_argument('--batch_size', type = int, default = 32)
-#    parser.add_argument('--num_classes', type = int, default = 4)
-#    parser.add_argument('--num_classes', type = int, default = 3)
     parser.add_argument('--num_classes', type = int, default = 2)
-#    parser.add_argument('--n_epochs', type = int, default = 10)
     parser.add_argument('--n_epochs', type = int, default = 20)
     parser.add_argument('--seed', type = int, default = 44)
     parser.add_argument('--device', type = str, default = 'cuda')
@@ -740,17 +712,12 @@ if __name__ == "__main__":
     
     parser.add_argument('--gene2vec_dim', type = int, default = 200)
 
-#    parser.add_argument('--sort_pool_k', type = float, default = 0.4)
     parser.add_argument('--sort_pool_k', type = float, default = 0.)
     parser.add_argument('--gat_num_heads', type = int, default = 4)
 
     #   Attention
     parser.add_argument('--attn_dim', type = int, default = 64)
     parser.add_argument('--attn_type', type = str, default = 'multi')
-#    parser.add_argument('--attn_type', type = str, default = 'add')
-
-#    parser.add_argument('--num_multi_heads', type = int, default = 4)
-
     parser.add_argument('--learning_rate', type = float, default = 0.001)
     parser.add_argument('--weight_decay', type = float, default = 1e-9)
     parser.add_argument('--l1_reg_coeff', type = float, default = 0)
@@ -760,7 +727,6 @@ if __name__ == "__main__":
     parser.add_argument('--gcnds', type = int, default = 64)
     parser.add_argument('--num_gcn_hops', type = int, default = 3)
 
-#    parser.add_argument('--g2v_train', type = bool, default = True)
     parser.add_argument('--g2v_pretrained', type = bool, default = True)
 
     parser.add_argument('--grid_search', type = bool, default = False)
@@ -771,14 +737,12 @@ if __name__ == "__main__":
     parser.add_argument('--dataset_ver', type = int, default = 4)
     parser.add_argument('--save_model', type = bool, default = True)
     parser.add_argument('--eval', type = bool, default = False)
-#    parser.add_argument('--time_ensemble', type = bool, default = True)
     parser.add_argument('--eval_epoch', type = int, default = None)
     parser.add_argument('--grid_search_eval', type = bool, default = False)
 
 
 
-    #   sample edges for oversmoothing
-#    parser.add_argument('--num_edge_samples', type = int, default = 500)
+    #   sample edges/nodes for oversmoothing
     parser.add_argument('--num_edge_samples', type = int, default = 0)
     parser.add_argument('--num_node_samples', type = int, default = 500)
     args = parser.parse_args()
@@ -788,178 +752,40 @@ if __name__ == "__main__":
         args.save_model == False
 
     gcnd = args.gcnds
-#    gcnds = [64]
-#    gcnds = [64] # for Kegg
-#    gcnds = [64, 32, 16]
     
-    if args.grid_search == True:
-#        for wd in [1e-9, 1e-7, 1e-5]:
-#            for epoc in [10, 20, 30]:
-#            for epoc in [20, 30, 50]:
-#        for epoc in [10, 20, 30]:
-#        for gcnd in [32, 64]:
-#        for edge in [500, 1000, 2000, 5000]:
-        for node in [50, 100, 200, 500]:
-#        for wd in [1e-5, 1e-7]:
-#            for wd in [1e-5, 1e-7]:
-#            for wd in [1e-5, 1e-7, 1e-9]:
-#            for lr in [1e-3, 5e-4, 1e-4, 5e-5, 1e-5]:
-#            for epoc in [10, 20]:
-            for epoc in [10, 20]:
-                for wd in [1e-5, 1e-7]:
-#                for lr in [1e-3, 5e-4]:
-                    for lr in [1e-3, 5e-4, 1e-4]:
-#            for wd in [1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 0]:
-#                for wd in [1e-5,1e-7,1e-9, 0]:
-#                for wd in [1e-7, 1e-9]:
+    args.gcn_hidden_dim1 = gcnd
+    args.gcn_hidden_dim2 = gcnd
+    args.gcn_hidden_out = gcnd
 
-                        args.num_edge_samples = edge
-#                        args.num_node_samples = node
-                        args.seed = 44
-                        args.n_epochs = epoc
-                        args.learning_rate = lr
-                        args.weight_decay = wd
-                        args.gcn_hidden_dim1 = gcnd
-                        args.gcn_hidden_dim2 = gcnd
-                        args.gcn_hidden_out = gcnd
-#                    args.gex_embed_dim = gcnd*4
-#                    args.drug_embed_dim = gcnd*4
-#                    args.attn_dim = int(np.ceil(float(gcnd)/4))
-#                    args.smiles_emb_dim = int(float(gcnd)*4)
+    main(args)
+    print('Model : '+ args.model)
+    print('GEX feature : '+ args.gex_feat)
+    print('Drug feature : '+ args.drug_feat)
+    print('num classes : '+ str(args.num_classes))
+    print('num epochs : '+str(args.n_epochs))
+    print('batch size : '+ str(args.batch_size))
+    print('learning rate : ' + str(args.learning_rate))
+    print('weight decay : ' + str(args.weight_decay))
+    if 'GCN' or 'PPI' or 'kegg' in args.model:
+        print('gcn hidden dim : '+ str(args.gcn_hidden_dim1))
+        print('network name : ' + str(args.network_name))
+        print('Undirected Graph : ' + str(args.network_name))
+        print('GCN/GAT num hops: '+str(args.num_gcn_hops))
+    
+    print('drug embed dim : '+str(args.drug_embed_dim))
+    if 'attn' in args.model:
+        print('attn dim : '+str(args.attn_dim))
+    print('gex embed dim : '+str(args.gex_embed_dim))
+    print('drug embed dim : '+str(args.drug_embed_dim))
 
-                        main(args)
-                        print('Model : '+ args.model)
-                        print('GEX feature : '+ args.gex_feat)
-                        print('Drug feature : '+ args.drug_feat)
-                        print('num classes : '+ str(args.num_classes))
-                        print('num epochs : '+str(args.n_epochs))
-                        print('batch size : '+ str(args.batch_size))
-                        print('learning rate : ' + str(args.learning_rate))
-                        print('weight decay : ' + str(args.weight_decay))
-                        if 'GCN' or 'PPI' or 'kegg' in args.model:
-#                        print('smiles embed dim : ' + str(args.smiles_emb_dim))
-                            print('network name : ' + str(args.network_name))
-                            print('Undirected Graph : ' + str(args.undir_graph))
-                            print('GCN/GAT num hops: '+str(args.num_gcn_hops))
-                            print('gcn hidden dim : '+ str(args.gcn_hidden_dim1))
-#                    print('drug embed dim : '+ str(args.drug_embed_dim))
-                        else:
-                            print('drug embed dim : '+str(args.drug_embed_dim))
-                        print('attn dim : '+str(args.attn_dim))
-                        print('gex embed dim : '+str(args.gex_embed_dim))
+    if ('GAT' in args.model)&('GCN' in args.model):
+        print('gat num heads : ' + str(args.gat_num_heads))
 
-                        if 'GAT' in args.model:
-                            print('gat num heads : ' + str(args.gat_num_heads))
-#                print('loss alpha : '+str(args.loss_alpha.detach().cpu().numpy()))
-                        print('loss alpha : '+str(args.loss_alpha))
-                        print('use g2v pretrained : '+str(args.g2v_pretrained))
-#                    print('Use best : '+str(args.best))
-                        print('dataset ver : '+str(args.dataset_ver))
+    print('loss alpha : '+str(args.loss_alpha))
+    print('Use best : '+str(args.best))
+    print('use g2v pretrained : '+str(args.g2v_pretrained))
+    print('dataset ver : '+str(args.dataset_ver))
 
-                        #   sample edge
-                        print('num edges sampled : '+str(args.num_edge_samples))
-                        print('num nodes sampled : '+str(args.num_node_samples))
-
-
-                        print('=    '*8)
-
-    elif (args.eval == True) & (args.grid_search_eval == True):
-        for eval_epoch in range(3, 30):
-#            for wd in [1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 0]:
-#                for wd in [1e-5,1e-7,1e-9, 0]:
-#                for wd in [1e-7, 1e-9]:
-            args.eval_epoch = eval_epoch 
-
-            args.seed = 44
-            args.gcn_hidden_dim1 = gcnd
-            args.gcn_hidden_dim2 = gcnd
-            args.gcn_hidden_out = gcnd
-#                    args.gex_embed_dim = gcnd*4
-#                    args.drug_embed_dim = gcnd*4
-#                    args.attn_dim = int(np.ceil(float(gcnd)/4))
-#                    args.smiles_emb_dim = int(float(gcnd)*4)
-
-            main(args)
-            print('Model : '+ args.model)
-            print('GEX feature : '+ args.gex_feat)
-            print('Drug feature : '+ args.drug_feat)
-            print('num classes : '+ str(args.num_classes))
-            print('num epochs : '+str(args.n_epochs))
-            print('batch size : '+ str(args.batch_size))
-            print('learning rate : ' + str(args.learning_rate))
-            print('weight decay : ' + str(args.weight_decay))
-            if 'GCN' or 'PPI' or 'kegg' in args.model:
-#                        print('smiles embed dim : ' + str(args.smiles_emb_dim))
-                print('network name : ' + str(args.network_name))
-                print('Undirected Graph : ' + str(args.undir_graph))
-                print('GCN/GAT num hops: '+str(args.num_gcn_hops))
-                print('gcn hidden dim : '+ str(args.gcn_hidden_dim1))
-#                    print('drug embed dim : '+ str(args.drug_embed_dim))
-            else:
-                print('drug embed dim : '+str(args.drug_embed_dim))
-            print('attn dim : '+str(args.attn_dim))
-            print('gex embed dim : '+str(args.gex_embed_dim))
-
-            if 'GAT' in args.model:
-                print('gat num heads : ' + str(args.gat_num_heads))
-#                print('loss alpha : '+str(args.loss_alpha.detach().cpu().numpy()))
-            print('loss alpha : '+str(args.loss_alpha))
-            print('use g2v pretrained : '+str(args.g2v_pretrained))
-#                    print('Use best : '+str(args.best))
-            print('dataset ver : '+str(args.dataset_ver))
-            print('eval epoch : '+str(args.eval_epoch))
-            print('=    '*8)
-
-
-
-
-    else:
-
-        gcnd = args.gcnds
-        args.gcn_hidden_dim1 = gcnd
-        args.gcn_hidden_dim2 = gcnd
-        args.gcn_hidden_out = gcnd
-#        args.gex_embed_dim = gcnd*4
-#        args.drug_embed_dim = gcnd*4
-#        args.attn_dim = int(np.ceil(float(gcnd)/4))
-#        args.smiles_emb_dim = int(float(gcnd)*4)
-
-        main(args)
-        print('Model : '+ args.model)
-        print('GEX feature : '+ args.gex_feat)
-        print('Drug feature : '+ args.drug_feat)
-        print('num classes : '+ str(args.num_classes))
-        print('num epochs : '+str(args.n_epochs))
-        print('batch size : '+ str(args.batch_size))
-        print('learning rate : ' + str(args.learning_rate))
-        print('weight decay : ' + str(args.weight_decay))
-        if 'GCN' or 'PPI' or 'kegg' in args.model:
-#            print('smiles embed dim : ' + str(args.smiles_emb_dim))
-            print('gcn hidden dim : '+ str(args.gcn_hidden_dim1))
-#                    print('drug embed dim : '+ str(args.drug_embed_dim))
-            print('network name : ' + str(args.network_name))
-            print('Undirected Graph : ' + str(args.network_name))
-            print('GCN/GAT num hops: '+str(args.num_gcn_hops))
-        
-        print('drug embed dim : '+str(args.drug_embed_dim))
-        if 'attn' in args.model:
-            print('attn dim : '+str(args.attn_dim))
-        print('gex embed dim : '+str(args.gex_embed_dim))
-        print('drug embed dim : '+str(args.drug_embed_dim))
-
-        if ('GAT' in args.model)&('GCN' in args.model):
-            print('gat num heads : ' + str(args.gat_num_heads))
-
-#                print('loss alpha : '+str(args.loss_alpha.detach().cpu().numpy()))
-        print('loss alpha : '+str(args.loss_alpha))
-        print('Use best : '+str(args.best))
-        print('use g2v pretrained : '+str(args.g2v_pretrained))
-        print('dataset ver : '+str(args.dataset_ver))
-
-        #   sample edge
-        print('num edges sampled : '+str(args.num_edge_samples))
-        print('num nodes sampled : '+str(args.num_node_samples))
-
-        print('=    '*8)
+    print('=    '*8)
     
 
