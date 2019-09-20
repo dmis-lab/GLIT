@@ -9,6 +9,7 @@ torch-scatter==1.1.2
 torch-sparse==0.2.4
 torch-cluster==1.2.4
 torch-geometric==1.1.2
+networkx==2.3
 rdkit
 ```
 
