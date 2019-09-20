@@ -14,11 +14,7 @@ import networkx as nx
 from scipy import sparse
 
 from sklearn import preprocessing
-
-
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, accuracy_score
-
-
 
 from model import *
 import utils2
@@ -537,10 +533,6 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 
                                                         gamma = 0.95)
 
-        
-
-        #   #   #   #   #   #   #   #   #   #   #   #   #   #   #   
-            #   #   #   #   #   #   #   #   #   #   #   #   #   #   #   
 
         model_path = 'models/'+str(args.model)+str(args.num_gcn_hops)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'_'+str(args.learning_rate)+'_'+str(args.weight_decay)+'_'+str(args.n_epochs)+'_'+str(args.attn_dim)+'_'+str(args.loss_alpha)+'_'+str(args.g2v_pretrained)+'_'+str(args.seed)+'_ver'+str(args.dataset_ver) 
         if args.num_classes == 2:
@@ -587,32 +579,11 @@ def main(args):
             with open(model_path+'_preds.pkl', 'wb') as f:
                 pickle.dump([test_pred, test_proba, test_label, test_drug_names], f)
 
-        if args.num_classes == 2:
-            valid_avg_scores.append(Return_Scores(valid_label, valid_pred, valid_proba))
-            valid_drug_scores.append(Return_Scores(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg))
-            avg_scores.append(Return_Scores(test_label, test_pred, test_proba))
-            drug_score = Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg)
-            drug_scores.append(Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg))
-
-        elif (args.num_classes == 3) & (args.dataset_ver != 6):
-            #   3 class into 2 class
-            
-            valid_label, valid_pred, valid_proba = To2class_pred(valid_label, valid_pred, valid_proba)
-            valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg = To2class_pred(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg)
-            test_label, test_pred, test_proba = To2class_pred(test_label, test_pred, test_proba)
-            test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg = To2class_pred(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg)
-
-            valid_avg_scores.append(Return_Scores(valid_label, valid_pred, valid_proba))
-            valid_drug_scores.append(Return_Scores(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg))
-            avg_scores.append(Return_Scores(test_label, test_pred, test_proba))
-            drug_score = Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg)
-            drug_scores.append(Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg))
-            
-
-
-        else:
-            pass
-
+        valid_avg_scores.append(Return_Scores(valid_label, valid_pred, valid_proba))
+        valid_drug_scores.append(Return_Scores(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg))
+        avg_scores.append(Return_Scores(test_label, test_pred, test_proba))
+        drug_score = Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg)
+        drug_scores.append(Return_Scores(test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg))
 
         args.seed += 1
         #   #   #   #   #   iter ends
