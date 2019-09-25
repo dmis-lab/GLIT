@@ -13,52 +13,10 @@ from torch.autograd import gradcheck
 
 
 def get_batch_adj(adj, tmp_batch_size, args):
-    if args.num_node_samples == 0:
-        adjs_list = [(adj + i*args.num_genes) for i in range(tmp_batch_size)]
-    else:
-        adjs_list = [(adj + i*args.num_node_samples) for i in range(tmp_batch_size)]
+    adjs_list = [(adj + i*args.num_genes) for i in range(tmp_batch_size)]
     adjs_list = np.hstack(adjs_list)
     return adjs_list
 
-def drug2gex_attn_applied(drug_feat, gex_feat, self, args, training):
-
-    #   drug input & gex input requires same dimension
-    if args.attn_type == 'multi':
-        drug_proj = F.dropout(
-                        torch.tanh(
-                        self.query_proj(drug_feat)),
-                        training = training)
-        #   bs x 200
-        gex_proj = F.dropout(
-                        torch.tanh(
-                        self.key_proj(gex_feat)),
-                        training = training)
-        #   bs x num genes x 200
-
-        #   Multiplicative Attention
-        drug_proj  = drug_proj.unsqueeze(1)
-        gex_proj = gex_proj.transpose(2,1)
-        attn = torch.bmm(drug_proj, gex_proj).squeeze(1) # bs x num_genes 
-        attn = F.softmax(attn, dim = -1)
-
-    elif args.attn_type == 'add':
-        drug_proj = F.dropout(
-                        self.query_proj(drug_feat),
-                        training = training)
-        #   bs x 200
-        gex_proj = F.dropout(
-                        self.key_proj(gex_feat),
-                        training = training)
-        #   bs x num genes x 200
-
-        #   Additive Attention
-        drug_proj = drug_proj.unsqueeze(1)
-        attn = self.attn_proj(torch.tanh(drug_proj + gex_proj)).squeeze(-1)
-        attn = F.softmax(attn, dim = -1)
-
-    gex_attned = torch.mul(attn.unsqueeze(-1), gex_feat) # bs x num_genes x 200
-    
-    return attn, gex_attned
 
 class GEX_PPI_GAT_cat4_MLP(nn.Module):  
     def __init__(self, ppi_adj, g2v_embedding, args):
@@ -110,11 +68,6 @@ class GEX_PPI_GAT_cat4_MLP(nn.Module):
 
         self.ppi_adj = ppi_adj # 2 x num edges
         print(self.ppi_adj.shape)
-
-        #   Attention layers
-        if args.attn_dim != 0 :
-            self.query_proj = nn.Linear(args.drug_embed_dim, args.attn_dim, bias = True)
-            self.key_proj = nn.Linear(args.gene2vec_dim, args.attn_dim, bias = True)
 
 
         #   Read out MLP
@@ -199,24 +152,13 @@ class GEX_PPI_GAT_cat4_MLP(nn.Module):
 
         #   Readout + view batchwise
 
-        if args.sort_pool_k == 0:
-            read_out = torch.cat(gcn_cat_list, dim = -1) #  bs x n nodes x 728
-            read_out = read_out.transpose(2, 1) #   bs x 728 x n nodes
-            read_out = F.dropout(self.activ(self.readout_mlp1(read_out)), training = training)
-            read_out = F.dropout(self.activ(self.readout_mlp2(read_out)), training = training)
-            read_out = F.dropout(self.activ(self.readout_mlp3(read_out)), training = training).squeeze(-1)
+#        if args.sort_pool_k == 0:
+        read_out = torch.cat(gcn_cat_list, dim = -1) #  bs x n nodes x 728
+        read_out = read_out.transpose(2, 1) #   bs x 728 x n nodes
+        read_out = F.dropout(self.activ(self.readout_mlp1(read_out)), training = training)
+        read_out = F.dropout(self.activ(self.readout_mlp2(read_out)), training = training)
+        read_out = F.dropout(self.activ(self.readout_mlp3(read_out)), training = training).squeeze(-1)
         
-
-        #   sort pooling
-        else:
-            sort_pool_k = int(np.ceil(args.num_genes * args.sort_pool_k))
-            batch_output = geo_nn.global_sort_pool(gex_embed, batch_idx, sort_pool_k)
-            batch_output = batch_output.view(self.tmp_batch_size, -1, args.gcn_hidden_out)
-            ####
-            self.attn, batch_output = drug2gex_attn_applied(drug_emb, batch_output, self, args, training)
-            ####
-            read_out = torch.mean(batch_output, dim = 1)
-
 
         total_emb = torch.cat([drug_emb, read_out, dose, duration], dim = -1) 
 

@@ -44,10 +44,7 @@ def Get_DataLoader(drug_label, input_list, args):
     test_drug = []
     try:
         if args.dataset_ver == 4:
-#            drug_list_path = 'drug_list_92742_70138_'+str(args.seed)+'ver4.pkl'
             drug_list_path = 'data/drug_list_92742_70138_'+str(args.seed)+'ver4.pkl'
-        elif args.dataset_ver == 6:
-            drug_list_path = 'drug_list_92742_70138_'+str(args.seed)+'ver6.pkl'
         with open(drug_list_path, 'rb') as f:
             train_drug, valid_drug, test_drug = pickle.load(f)
 
@@ -114,10 +111,7 @@ def TrainAndTest(train_loader, valid_loader, test_loader, model, optimizer,
             #   divide loss for each sample for num of drugs
             num_samples = x[9].float().to(device)
             
-            if args.loss_alpha != 0.:
-                loss = loss_fn(proba, label, num_samples, args.loss_alpha, args, device)
-            else:
-                loss = loss_fn(proba, label)
+            loss = loss_fn(proba, label)
 
             #   Loss propagation divided by num of samples per drug
 
@@ -296,14 +290,8 @@ def ValidAndTest(valid_loader, test_loader, model, optimizer,
 
     for x in valid_loader:
 
-        if ('PPI' in args.model) or ('kegg' in args.model):
-            proba = model(x, ppi_adj, get_gex_idxs,
-                            device, args, epoch, training = False)
-        elif 'attn' in args.model:
-            proba = model(x, get_gex_idxs,
-                            device, args, training = False)
-        else:
-            proba = model(x, device, args, training = False)
+        proba = model(x, ppi_adj, get_gex_idxs,
+                        device, args, epoch, training = False)
 
         label = x[4].to(device)
         drug_name = x[5]
@@ -321,14 +309,6 @@ def ValidAndTest(valid_loader, test_loader, model, optimizer,
     valid_proba = np.vstack(valid_proba)
     valid_label = np.hstack(valid_label)
 
-    print("Valid F1 Score")
-    if args.num_classes != 2:
-        print(f1_score(valid_label, valid_pred, average = 'macro'))
-        print(f1_score(valid_label, valid_pred, average = 'micro'))
-        print(f1_score(valid_label, valid_pred, average = 'weighted'))
-    else:
-        pass
-
     #   Test set
 
     test_pred = []
@@ -339,14 +319,9 @@ def ValidAndTest(valid_loader, test_loader, model, optimizer,
 
 
     for i, x in enumerate(test_loader):
-        if ('PPI' in args.model) or ('kegg' in args.model):
-            proba = model(x, ppi_adj, get_gex_idxs, 
-                            device, args, epoch, training = False)
-        elif 'attn' in args.model:
-            proba = model(x, get_gex_idxs,
-                            device, args, training = False)
-        else:
-            proba = model(x, device, args, training = False)
+        proba = model(x, ppi_adj, get_gex_idxs, 
+                        device, args, epoch, training = False)
+
         label = x[4]
         drug_name = x[5]
 
@@ -356,26 +331,12 @@ def ValidAndTest(valid_loader, test_loader, model, optimizer,
         test_proba.append(proba)
         test_label.append(label)
         test_drug_names.extend(drug_name)
-
-        if i==0:
-            try:
-                print('Attn scores')
-                print(model.attn.detach().cpu().numpy())
-            except:
-                pass
-
         
     test_pred = np.hstack(test_pred)
     test_proba = np.vstack(test_proba)
     test_label = np.hstack(test_label)
 
     print("Test Score")
-    print("Test Preds")
-    print(test_pred[:10])
-    print("Test Probas")
-    print(test_proba[:10])
-    print("Test Labels")
-    print(test_label[:10])
     if args.num_classes == 2:
         print(Print_Scores(test_label, test_pred, test_proba))
     else:
@@ -425,11 +386,6 @@ def main(args):
     args.num_genes = len(input_list[0][1])
 
 
-    label2int = {'vNo-DILI-Concern' : 0,
-                 'vLess-DILI-Concern' : 3,
-                 'vMost-DILI-Concern' : 1,
-                 'Ambiguous DILI-concern' : 3}
-
     #   For 2 class analysis
     if args.num_classes == 2:
         for i, x in enumerate(input_list):
@@ -440,22 +396,11 @@ def main(args):
                                     delimiter = '\t',
                                     index_col = 0) 
 
-    # acquire atom symbols / bond types
-
-    atom_dict, _, args = get_atom_symbol_bonds(drug_label, args)
-
     #   gene expressions in samples are sorted in gene info index order!
 
     gene_info = get_gene_info(args)
     #   index : gene num, 'pr_gene_sympol' : gene symbol
 
-
-    #   Get max len of atom adj for padding
-    if 'GCN_' in args.model:
-        input_list, args = get_GCN_features(input_list, atom_dict, args)
-
-    #   x[8] : drug adj matrix
-    #   x[9] = indexs of drug atoms
 
     random.shuffle(input_list)
 
@@ -510,7 +455,6 @@ def main(args):
         #   Choose Model
 
         model = Get_Models(ppi_adj, g2v_embedding, args, device)
-        #   #   #   #   
 
         def init_normal(m):
             if type(m) == nn.Linear:
@@ -520,28 +464,17 @@ def main(args):
         print(model.parameters)
         
 
-#    loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(model.parameters(), 
                                     lr = args.learning_rate,
                                     weight_decay = args.weight_decay)
-        if args.loss_alpha == 0.0:
-            loss_fn = nn.CrossEntropyLoss()
-        else:
-            loss_fn = utils2.loss_fn
-        #   #   #   #
 
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 
                                                         gamma = 0.95)
 
 
-        model_path = 'models/'+str(args.model)+str(args.num_gcn_hops)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'_'+str(args.learning_rate)+'_'+str(args.weight_decay)+'_'+str(args.n_epochs)+'_'+str(args.attn_dim)+'_'+str(args.loss_alpha)+'_'+str(args.g2v_pretrained)+'_'+str(args.seed)+'_ver'+str(args.dataset_ver) 
-        if args.num_classes == 2:
-            pass
-        elif (args.num_classes == 3) & (args.dataset_ver == 6):
-            model_path = 'models3/'+model_path
-        elif (args.num_classes == 3) &(args.eval==True):
-            model_path = model_path[:-1]+'6'
-            model_path = 'models3/'+model_path
+#        model_path = 'models/'+str(args.model)+str(args.num_gcn_hops)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'_'+str(args.learning_rate)+'_'+str(args.weight_decay)+'_'+str(args.n_epochs)+'_'+str(args.attn_dim)+'_'+str(args.loss_alpha)+'_'+str(args.g2v_pretrained)+'_'+str(args.seed)+'_ver'+str(args.dataset_ver) 
+        model_path = 'models/'+str(args.model)+str(args.num_gcn_hops)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'_'+str(args.learning_rate)+'_'+str(args.weight_decay)+'_'+str(args.n_epochs)+'_'+str(args.g2v_pretrained)+'_'+str(args.seed)+'_ver'+str(args.dataset_ver) 
             
 
         if args.eval == True:
@@ -572,12 +505,9 @@ def main(args):
         if (args.save_model == True) & (args.eval == False):
             torch.save(model.state_dict(), model_path)
 
-        if args.eval==True:
-            with open(model_path+'_eval_preds.pkl', 'wb') as f:
-                pickle.dump([test_pred, test_proba, test_label, test_drug_names], f)
-        else:
-            with open(model_path+'_preds.pkl', 'wb') as f:
-                pickle.dump([test_pred, test_proba, test_label, test_drug_names], f)
+        with open(model_path+'_preds.pkl', 'wb') as f:
+            pickle.dump([test_drug_preds_avg, test_drug_probas_avg, 
+                    test_drug_labels_avg, test_drug_names_avg], f)
 
         valid_avg_scores.append(Return_Scores(valid_label, valid_pred, valid_proba))
         valid_drug_scores.append(Return_Scores(valid_drug_labels_avg, valid_drug_preds_avg, valid_drug_probas_avg))
@@ -616,33 +546,6 @@ def main(args):
     print("Total Drug Std")
     print(drug_std)
 
-
-#    with open(str(args.model)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'.txt', 'a') as f:
-    with open(str(args.model)+'_'+str(args.drug_feat)+'_'+str(args.gex_feat)+'_ver'+str(args.dataset_ver)+'.txt', 'a') as f:
-        f.write('Model : '+ args.model+'\n')
-        f.write('num epochs : '+str(args.n_epochs)+'\n')
-        f.write('learning rate : '+str(args.learning_rate)+'\n')
-        f.write('weight decay : '+str(args.weight_decay)+'\n')
-        f.write('attn dim : '+str(args.attn_dim))
-        f.write('g2v pretrained : '+str(args.g2v_pretrained))
-        f.write('loss alpha : '+str(args.loss_alpha))
-        f.write("Total valid Avg Scores\n")
-        f.write(str(valid_avg_mean)+'\n')
-        f.write("Total valid Avg Std\n")
-        f.write(str(valid_avg_std)+'\n')
-        f.write("Total valid Drug Scores\n")
-        f.write(str(valid_drug_mean)+'\n')
-        f.write("Total valid Drug Std\n")
-        f.write(str(valid_drug_mean)+'\n')
-        f.write("Total Avg Scores\n")
-        f.write(str(avg_mean)+'\n')
-        f.write("Total Avg Std\n")
-        f.write(str(avg_std)+'\n')
-        f.write("Total Drug Scores\n")
-        f.write(str(drug_mean)+'\n')
-        f.write("Total Drug Std\n")
-        f.write(str(drug_std)+'\n\n')
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -667,12 +570,6 @@ if __name__ == "__main__":
     parser.add_argument('--gex_embed_dim', type = int, default = 256)
     #   TR net
     parser.add_argument('--drug_embed_dim', type = int, default = 256)
-    #   GCN
-    parser.add_argument('--num_atom_symbols', type = int, default = 10)
-    parser.add_argument('--atom_pad_symbol', type = str, default = '!')
-    parser.add_argument('--atom_pad_idx', type = int, default = 0)
-    parser.add_argument('--num_bond_types', type = int, default = 4)
-#    parser.add_argument('--smiles_emb_dim', type = int, default = 256)
     parser.add_argument('--max_adj_len', type = int, default = 0)
 
 
@@ -687,35 +584,23 @@ if __name__ == "__main__":
     parser.add_argument('--gat_num_heads', type = int, default = 4)
 
     #   Attention
-    parser.add_argument('--attn_dim', type = int, default = 64)
-    parser.add_argument('--attn_type', type = str, default = 'multi')
+
     parser.add_argument('--learning_rate', type = float, default = 0.001)
     parser.add_argument('--weight_decay', type = float, default = 1e-9)
-    parser.add_argument('--l1_reg_coeff', type = float, default = 0)
-
-    parser.add_argument('--loss_alpha', type = float, default = 1.0)
-
     parser.add_argument('--gcnds', type = int, default = 64)
     parser.add_argument('--num_gcn_hops', type = int, default = 3)
 
     parser.add_argument('--g2v_pretrained', type = bool, default = True)
 
-    parser.add_argument('--grid_search', type = bool, default = False)
     parser.add_argument('--network_name', type = str, default = 'omnipath')
-    parser.add_argument('--best', type = bool, default = False)
     parser.add_argument('--undir_graph', type = bool, default = False)
 
     parser.add_argument('--dataset_ver', type = int, default = 4)
     parser.add_argument('--save_model', type = bool, default = True)
     parser.add_argument('--eval', type = bool, default = False)
-    parser.add_argument('--eval_epoch', type = int, default = None)
-    parser.add_argument('--grid_search_eval', type = bool, default = False)
 
 
 
-    #   sample edges/nodes for oversmoothing
-    parser.add_argument('--num_edge_samples', type = int, default = 0)
-    parser.add_argument('--num_node_samples', type = int, default = 500)
     args = parser.parse_args()
 
 
@@ -744,16 +629,12 @@ if __name__ == "__main__":
         print('GCN/GAT num hops: '+str(args.num_gcn_hops))
     
     print('drug embed dim : '+str(args.drug_embed_dim))
-    if 'attn' in args.model:
-        print('attn dim : '+str(args.attn_dim))
     print('gex embed dim : '+str(args.gex_embed_dim))
     print('drug embed dim : '+str(args.drug_embed_dim))
 
     if ('GAT' in args.model)&('GCN' in args.model):
         print('gat num heads : ' + str(args.gat_num_heads))
 
-    print('loss alpha : '+str(args.loss_alpha))
-    print('Use best : '+str(args.best))
     print('use g2v pretrained : '+str(args.g2v_pretrained))
     print('dataset ver : '+str(args.dataset_ver))
 
