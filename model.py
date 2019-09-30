@@ -29,11 +29,11 @@ class GEX_PPI_GAT_cat4_MLP(nn.Module):
         self.bn3 = nn.BatchNorm1d(1)
         self.bn4 = nn.BatchNorm1d(1)
 
-        self.drug_mlp1 = nn.Linear(args.resimnet_dim, 
-                    int(args.resimnet_dim*2/3 + args.drug_embed_dim/3), bias = True)
-        self.drug_mlp2 = nn.Linear(int(args.resimnet_dim*2/3 + args.drug_embed_dim/3),
-                    int(args.resimnet_dim/3+args.drug_embed_dim*2/3), bias = True)
-        self.drug_mlp3 = nn.Linear(int(args.resimnet_dim/3+args.drug_embed_dim*2/3),
+        self.drug_mlp1 = nn.Linear(args.ecfp_nBits, 
+                    int(args.ecfp_nBits*2/3 + args.drug_embed_dim/3), bias = True)
+        self.drug_mlp2 = nn.Linear(int(args.ecfp_nBits*2/3 + args.drug_embed_dim/3),
+                    int(args.ecfp_nBits/3+args.drug_embed_dim*2/3), bias = True)
+        self.drug_mlp3 = nn.Linear(int(args.ecfp_nBits/3+args.drug_embed_dim*2/3),
                     args.drug_embed_dim, bias = True)
 
         self.gats = {}
@@ -67,8 +67,6 @@ class GEX_PPI_GAT_cat4_MLP(nn.Module):
 
 
         self.ppi_adj = ppi_adj # 2 x num edges
-        print(self.ppi_adj.shape)
-
 
         #   Read out MLP
         
@@ -144,15 +142,10 @@ class GEX_PPI_GAT_cat4_MLP(nn.Module):
 
             #   append each readouts
             gcn_cat_list.append(gex_embed.view(self.tmp_batch_size, -1, 
-                        args.gcn_hidden_out*args.gat_num_heads)) # bs x n nodes x 256
-
-        #   get GAT node features for oversmoothing check
-        self.gcn_cat_list = gcn_cat_list
-
+                        args.gcn_hidden_dim1*args.gat_num_heads)) # bs x n nodes x 256
 
         #   Readout + view batchwise
 
-#        if args.sort_pool_k == 0:
         read_out = torch.cat(gcn_cat_list, dim = -1) #  bs x n nodes x 728
         read_out = read_out.transpose(2, 1) #   bs x 728 x n nodes
         read_out = F.dropout(self.activ(self.readout_mlp1(read_out)), training = training)

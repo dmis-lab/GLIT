@@ -17,7 +17,6 @@ from sklearn import preprocessing
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, accuracy_score
 
 from model import *
-#import utils2
 from utils2 import *
 
 import argparse
@@ -38,73 +37,12 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 #   #   #   #   #   #   
 
-def Get_DataLoader(drug_label, input_list, args):
-    #   Drug Label as df
-    #   Input List as list
-    train_drug = []
-    valid_drug = []
-    test_drug = []
-    try:
-        if args.dataset_ver == 4:
-            drug_list_path = 'data/drug_list_92742_70138_'+str(args.seed)+'ver4.pkl'
-        with open(drug_list_path, 'rb') as f:
-            train_drug, valid_drug, test_drug = pickle.load(f)
-
-    except:
-        print('Drug List is not created yet')
-        print('data ver :' + str(args.dataset_ver))
-
-
-    train_list = []
-    valid_list = []
-    test_list = []
-
-    for i, x in enumerate(input_list):
-        if x[5] in train_drug:
-            train_list.append(x)
-        elif x[5] in valid_drug:
-            valid_list.append(x)
-        elif x[5] in test_drug:
-            test_list.append(x)
-    print('train set len : ' + str(len(train_list)))
-    print('valid set len : ' + str(len(valid_list)))
-    print('test set len : ' + str(len(test_list)))
-
-    train_loader = DataLoader(dataset = train_list,
-                            batch_size = args.batch_size,
-                            shuffle = True)
-    try:
-        valid_loader = DataLoader(dataset = valid_list,
-                                batch_size = args.batch_size,
-                                shuffle = True)
-    except:
-        pass
-
-    test_loader = DataLoader(dataset = test_list,
-                            batch_size = args.batch_size,
-                            shuffle = True)
-    return train_loader, valid_loader, test_loader
-
-
-
-
 def Get_Models(ppi_adj, g2v_embedding, args, device):
 
     if args.model == 'GEX_PPI_GAT_cat4_MLP':
         return GEX_PPI_GAT_cat4_MLP(ppi_adj, g2v_embedding, args).to(device)
     
 def main(args):
-    #   #   #   #   #   #   
-    seed = 44
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    #   #   #   #   #   #   
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device[-1]
 
@@ -138,7 +76,6 @@ def main(args):
                                     delimiter = '\t',
                                     index_col = 0) 
 
-    #   gene expressions in samples are sorted in gene info index order!
 
     gene_info = get_gene_info(args)
     #   index : gene num, 'pr_gene_sympol' : gene symbol
@@ -153,31 +90,10 @@ def main(args):
 #  use ecfp feature
     for i, x in enumerate(input_list):
         input_list[i].append(get_ecfp_fingerprints(x[7], args))
-    args.resimnet_dim = args.ecfp_nBits
 
     if 'PPI' in args.model:
         gene2vecdict, gene_info, ppi_adj, ppi_nx, g2v_embedding, get_gex_idxs, args = get_ppi_features(gene_info, args)
-        
-    elif 'attn' in args.model:
 
-        gene2vecdict, gene_info, g2v_embedding, get_gex_idxs, args = get_drug_attn_features(gene_info, args)
-        ppi_adj = None
-    else:
-        gene2vecdict = None
-        ppi_adj = None
-        g2v_embedding = None
-        get_gex_idxs = None
-
-
-#   Try Focal loss approach : add num samples of the drug
-    drug_info_nums = pd.read_csv('data/drug_label_92742_70138.tsv',
-                                delimiter = '\t',
-                                index_col = 0)
-    for i, x in enumerate(input_list):
-        pert_iname = input_list[i][5]
-        num_samples = drug_info_nums.loc[pert_iname, 'num_samples']
-        input_list[i].append(num_samples) # x[9]
-    #   add alpha as parameters : later. 
 
     #   Scores over 5 random samples
     valid_avg_scores = []
@@ -303,37 +219,19 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type = int, default = 44)
     parser.add_argument('--device', type = str, default = 'cuda')
 
-
-    #   features
     parser.add_argument('--ecfp_nBits', type = int, default = 2048)
     parser.add_argument('--ecfp_radius', type = int, default = 2)
-    parser.add_argument('--resimnet_dim', type = int, default = 300)
-    parser.add_argument('--num_genes', type = int, default = 300)
-    parser.add_argument('--gex_embed_dim', type = int, default = 256)
-    #   TR net
+    parser.add_argument('--num_genes', type = int, default = 978)
+
     parser.add_argument('--drug_embed_dim', type = int, default = 256)
-    parser.add_argument('--max_adj_len', type = int, default = 0)
-
-
     parser.add_argument('--gcn_hidden_dim1', type = int, default = 64)
-    parser.add_argument('--gcn_hidden_dim2', type = int, default = 64)
-    parser.add_argument('--gcn_hidden_out', type = int, default = 64)
-    parser.add_argument('--adj_max_len', type = int, default = 0)
-    
-    parser.add_argument('--gene2vec_dim', type = int, default = 200)
-
-    parser.add_argument('--sort_pool_k', type = float, default = 0.)
-    parser.add_argument('--gat_num_heads', type = int, default = 4)
-
-    #   Attention
-
-    parser.add_argument('--learning_rate', type = float, default = 0.001)
-    parser.add_argument('--weight_decay', type = float, default = 1e-9)
-    parser.add_argument('--gcnds', type = int, default = 64)
     parser.add_argument('--num_gcn_hops', type = int, default = 3)
+    parser.add_argument('--gat_num_heads', type = int, default = 4)
+    parser.add_argument('--gene2vec_dim', type = int, default = 200)
+    parser.add_argument('--learning_rate', type = float, default = 5e-4)
+    parser.add_argument('--weight_decay', type = float, default = 1e-5)
 
     parser.add_argument('--g2v_pretrained', type = bool, default = True)
-
     parser.add_argument('--network_name', type = str, default = 'omnipath')
     parser.add_argument('--undir_graph', type = bool, default = False)
 
@@ -349,33 +247,20 @@ if __name__ == "__main__":
     if args.eval == True:
         args.save_model == False
 
-    gcnd = args.gcnds
-    
-    args.gcn_hidden_dim1 = gcnd
-    args.gcn_hidden_dim2 = gcnd
-    args.gcn_hidden_out = gcnd
 
     main(args)
     print('Model : '+ args.model)
-    print('GEX feature : '+ args.gex_feat)
-    print('Drug feature : '+ args.drug_feat)
-    print('num classes : '+ str(args.num_classes))
     print('num epochs : '+str(args.n_epochs))
     print('batch size : '+ str(args.batch_size))
     print('learning rate : ' + str(args.learning_rate))
     print('weight decay : ' + str(args.weight_decay))
-    if 'GCN' or 'PPI' or 'kegg' in args.model:
+    if 'PPI' in args.model:
         print('gcn hidden dim : '+ str(args.gcn_hidden_dim1))
         print('network name : ' + str(args.network_name))
-        print('Undirected Graph : ' + str(args.network_name))
         print('GCN/GAT num hops: '+str(args.num_gcn_hops))
+        print('gat num heads : ' + str(args.gat_num_heads))
     
     print('drug embed dim : '+str(args.drug_embed_dim))
-    print('gex embed dim : '+str(args.gex_embed_dim))
-    print('drug embed dim : '+str(args.drug_embed_dim))
-
-    if ('GAT' in args.model)&('GCN' in args.model):
-        print('gat num heads : ' + str(args.gat_num_heads))
 
     print('use g2v pretrained : '+str(args.g2v_pretrained))
     print('dataset ver : '+str(args.dataset_ver))

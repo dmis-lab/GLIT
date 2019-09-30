@@ -26,6 +26,53 @@ from sklearn.preprocessing import LabelBinarizer
 import argparse
 import os
 
+def Get_DataLoader(drug_label, input_list, args):
+    #   Drug Label as df
+    #   Input List as list
+    train_drug = []
+    valid_drug = []
+    test_drug = []
+    try:
+        if args.dataset_ver == 4:
+            drug_list_path = 'data/drug_list_92742_70138_'+str(args.seed)+'ver4.pkl'
+        with open(drug_list_path, 'rb') as f:
+            train_drug, valid_drug, test_drug = pickle.load(f)
+
+    except:
+        print('Drug List is not created yet')
+        print('data ver :' + str(args.dataset_ver))
+
+
+    train_list = []
+    valid_list = []
+    test_list = []
+
+    for i, x in enumerate(input_list):
+        if x[5] in train_drug:
+            train_list.append(x)
+        elif x[5] in valid_drug:
+            valid_list.append(x)
+        elif x[5] in test_drug:
+            test_list.append(x)
+    print('train set len : ' + str(len(train_list)))
+    print('valid set len : ' + str(len(valid_list)))
+    print('test set len : ' + str(len(test_list)))
+
+    train_loader = DataLoader(dataset = train_list,
+                            batch_size = args.batch_size,
+                            shuffle = True)
+    try:
+        valid_loader = DataLoader(dataset = valid_list,
+                                batch_size = args.batch_size,
+                                shuffle = True)
+    except:
+        pass
+
+    test_loader = DataLoader(dataset = test_list,
+                            batch_size = args.batch_size,
+                            shuffle = True)
+    return train_loader, valid_loader, test_loader
+
 
 def Get_Drugwise_Preds(test_labels, test_preds, test_probas, test_drug_names):
 
@@ -135,112 +182,6 @@ def Return_Scores(labels, preds, probas):
                 Get_Specificity(labels, preds)
                 ]
 
-#   Create Loss Alpha as parameter
-def loss_fn(proba, label, num_samples, alpha, args, device):
-    losses = torch.zeros(1).to(device)
-#        num_samples = torch.pow(num_samples, alpha)
-    num_samples = torch.pow(num_samples, torch.tensor(alpha).to(device))
-
-    for c in range(args.num_classes):
-        label_c = torch.where(label == torch.tensor(c).to(device).expand_as(label), 
-                            torch.ones(1).to(device).expand_as(label)
-                            , torch.zeros(1).to(device).expand_as(label))
-        proba_c = F.log_softmax(proba, dim = -1)[:, c]
-#                    print(-1*label_c*proba_c)
-        if label_c.size()[0] >1:
-            loss = torch.mean(-1*label_c*proba_c/num_samples)
-        else:
-            loss = -1*label_c*proba_c
-        losses += loss
-    return losses
-
-def get_multi_binary_loss(proba, label, loss_fn, device):
-
-    bin_label = torch.tensor([[1,1,1,0,0],
-                              [0,1,1,1,0],
-                              [0,0,1,1,1]])
-    binned_label = bin_label[label].to(device)
-
-    loss = 0
-
-    proba = F.sigmoid(proba)
-    proba_minus = torch.tensor(1.).expand_as(proba).to(device) - proba
-    proba = torch.cat([proba, proba_minus], dim = -1)
-
-
-    proba_split = torch.split(proba, 5, dim = -2)
-    binned_label_split = torch.split(binned_label, 5, dim = -1)
-    print(proba_split)
-    print(proba_split[0].size())
-    print(binned_label_split)
-    print(binned_label_split[0].size())
-    for i in range(5):
-        print(loss_fn(proba_split[i], binned_label_split[i]).size())
-        loss += loss_fn(proba_split[i], binned_label_split[i])
-
-    return loss
-
-
-def globally_normalize_bipartite_adjacency(adjacencies, verbose=False, symmetric=True):
-    """ Globally Normalizes set of bipartite adjacency matrices """
-
-    if verbose:
-        print('Symmetrically normalizing bipartite adj')
-    # degree_u and degree_v are row and column sums of adj+I
-
-    adj_tot = np.sum(adj for adj in adjacencies)
-    degree_u = np.asarray(adj_tot.sum(1)).flatten()
-    degree_v = np.asarray(adj_tot.sum(0)).flatten()
-
-    # set zeros to inf to avoid dividing by zero
-    degree_u[degree_u == 0.] = np.inf
-    degree_v[degree_v == 0.] = np.inf
-
-    degree_u_inv_sqrt = 1. / np.sqrt(degree_u)
-    degree_v_inv_sqrt = 1. / np.sqrt(degree_v)
-    degree_u_inv_sqrt_mat = sparse.diags([degree_u_inv_sqrt], [0])
-    degree_v_inv_sqrt_mat = sparse.diags([degree_v_inv_sqrt], [0])
-
-    degree_u_inv = degree_u_inv_sqrt_mat.dot(degree_u_inv_sqrt_mat)
-
-    if symmetric:
-        adj_norm = [degree_u_inv_sqrt_mat.dot(adj).dot(degree_v_inv_sqrt_mat) for adj in adjacencies]
-
-    else:
-        adj_norm = [degree_u_inv.dot(adj) for adj in adjacencies]
-
-    return adj_norm
-
-
-def get_atom_symbol_bonds(drug_label, args):
-    atoms = []
-    bonds = []
-    for i, x in enumerate(drug_label.loc[:,'SMILES'].values.tolist()):    
-        imol = Chem.MolFromSmiles(x)
-        ato = set([atom.GetSymbol() for atom in imol.GetAtoms()])
-        bon = set([str(bond.GetBondType()) for bond in imol.GetBonds()])
-        for at in ato:
-            if at not in atoms:
-                atoms.append(at)
-        for bo in bon:
-            if bo not in bonds:
-                bonds.append(bo)
-    
-    args.num_atom_symbols = len(atoms)
-    args.num_bond_types = len(bonds)
-    atom_dict = {}
-    bond_dict = {}
-    
-    atom_dict[args.atom_pad_symbol] = args.atom_pad_idx
-#    bond_dict[args.bond_pad_symbol] = args.bond_pad_idx
-
-    for i, x in enumerate(atoms):
-        atom_dict[x] = i+1
-
-    bond_dict = {'SINGLE' : 1., 'AROMATIC' : 1.5, 'DOUBLE' : 2., 'TRIPLE' : 3}
-       
-
-    return atom_dict, bond_dict, args
 
 def get_gene_info(args):
     if args.gex_feat == 'l1000':
@@ -262,14 +203,6 @@ def get_gene_info(args):
                            index_col = 0)
     return gene_info
 
-def get_chem_feat(smiles):
-    imol = Chem.MolFromSmiles(smiles)
-    iadjtmp = Chem.rdmolops.GetAdjacencyMatrix(imol)
-            
-    norm_adj = nx.linalg.laplacianmatrix.normalized_laplacian_matrix(iadjtmp)
-    atoms = [atom.GetSymbol() for atom in imol.GetAtoms()]
-        
-    return norm_adj, atoms
 
 def get_ecfp_fingerprints(smiles, args):
 
@@ -282,101 +215,7 @@ def get_ecfp_fingerprints(smiles, args):
     
     return np.array(fps)
 
-def atom_features(atom):
-    return np.array(one_of_k_encoding_unk(atom.GetSymbol(),
-                                      ['C', 'N', 'O', 'S', 'F', 'Si', 'P', 'Cl', 'Br', 'Mg', 'Na',
-                                       'Ca', 'Fe', 'As', 'Al', 'I', 'B', 'V', 'K', 'Tl', 'Yb',
-                                       'Sb', 'Sn', 'Ag', 'Pd', 'Co', 'Se', 'Ti', 'Zn', 'H',    # H?
-                                       'Li', 'Ge', 'Cu', 'Au', 'Ni', 'Cd', 'In', 'Mn', 'Zr',
-                                       'Cr', 'Pt', 'Hg', 'Pb', 'Unknown']) +
-                    one_of_k_encoding(atom.GetDegree(), [0, 1, 2, 3, 4, 5, 6,7,8,9,10]) +
-                    one_of_k_encoding_unk(atom.GetTotalNumHs(), [0, 1, 2, 3, 4, 5, 6,7,8,9,10]) +
-                    one_of_k_encoding_unk(atom.GetImplicitValence(), [0, 1, 2, 3, 4, 5, 6,7,8,9,10]) +
-#                     one_of_k_encoding_unk(atom.GetBondTypeAsDouble(),[1.0, 1.5, 2.0])+
-                    [atom.GetIsAromatic()])
-
-def get_drug_gcn_feat(smiles, atom_dict, bond_dict):
-    #   create gcn feature (adj, atom index) from a sample
-
-    def get_chem_feat(smiles):
-        imol = Chem.MolFromSmiles(smiles)
-#        iadjtmp = Chem.rdmolops.GetAdjacencyMatrix(imol)
-        iadjtmp = Chem.rdmolops.GetAdjacencyMatrix(imol, useBO = True) 
-        #   1. : Single
-        #   1.5 : Aromatic
-        #   2.0 : Double
-        #   3.0 : Triple
-
-
-        #norm_adj = nx.linalg.laplacianmatrix.normalized_laplacian_matrix(iadjtmp)
-        atoms = [atom.GetSymbol() for atom in imol.GetAtoms()]
-            
-        bonds = [bond.GetBondType() for bond in imol.GetBonds()]
-                
-        #return norm_adj, atoms
-        return iadjtmp, atoms, bonds
-
-    drug_feats  = get_chem_feat(smiles)
-
-    #   drug adj mat : pad 0 to max len in batch
-    drug_adj = drug_feats[0]
-    #   #   #   #   #   #   #   #   
-    drug_atoms = drug_feats[1]
-    drug_atoms = [atom_dict[atom] for atom in drug_atoms]
-    #drug_atoms = [atom_features(atom) for atom in drug_atoms]
-    #   #   #   #   #   #   #   #   
-#    drug_bonds = drug_feats[2]
-    drug_bonds = [str(bond).split('.')[-1] for bond in drug_feats[2]]
-    drug_bonds = [bond_dict[bond] for bond in drug_bonds]
-
-    return drug_adj, drug_atoms, drug_bonds
-
-def adj_padding(adj, args):
-    max_len = args.max_adj_len
-    adj_pad = np.zeros((max_len,max_len))
-    adj_pad[:adj.shape[0], :adj.shape[1]] = adj
-
-    return adj_pad
-
-def atom_padding(atom, args):
-    #get list of atom strings with diff shapes
-
-    atom.extend([args.atom_pad_idx for _ in range(args.max_adj_len - len(atom))])
-        
-    return atom
-
-def get_max_adj_len(input_list, args):
-    for i, x in enumerate(input_list):
-        imol = Chem.MolFromSmiles(x[1])
-        iadjtmp = Chem.rdmolops.GetAdjacencyMatrix(imol)
-        if args.max_adj_len < iadjtmp.shape[0] :
-            args.max_adj_len = iadjtmp.shape[0]
-    return args
-
-
-
-def get_GCN_features(x, atom_dict, bond_dict, args):
-    #   x : smiles string
-
-    drug_adj, drug_atoms, drug_bonds = get_drug_gcn_feat(x, atom_dict, bond_dict)
-    #   padding for adj mat and atom list
-    drug_adj = adj_padding(drug_adj, args)
-#    drug_atoms = atom_padding(drug_atoms, args)
-
-    #   get adj mats into coo matrix by its values
-
-    #   1. : Single
-    #   1.5 : Aromatic
-    #   2.0 : Double
-    #   3.0 : Triple
-    
-    drug_adj = np.vstack([sparse.coo_matrix(drug_adj).row,
-                          sparse.coo_matrix(drug_adj).col,
-                          sparse.coo_matrix(drug_adj).data])
-    #   Returned drug adj mat is 3 x num edges
-
-    return drug_atoms, drug_adj
-
+"""
 def get_drug_attn_features(gene_info, args):
     with open('data/gene2vec_dim_200_iter_9_dict.pkl', 'rb') as f:
         gene2vecdict = pickle.load(f)
@@ -400,6 +239,7 @@ def get_drug_attn_features(gene_info, args):
     g2v_embedding = np.vstack([gene2vecdict[x] for x in gene_info.loc[:,'pr_gene_symbol']])
 
     return gene2vecdict, gene_info, g2v_embedding, get_gex_idxs, args
+"""
 
 def get_ppi_features(gene_info, args):
 
@@ -448,7 +288,6 @@ def get_ppi_features(gene_info, args):
 
     common_genes = set(gene_info.loc[:,'pr_gene_symbol'].values)&set(gene2vecdict.keys()) & set(ppi_nx.nodes)
 
-#    ppi_nx.remove_nodes_from(set(ppi_nx.nodes) - common_genes)
     ppi_nx = nx.subgraph(ppi_nx, list(common_genes)).copy()
 
     common_symbols = [x for x in gene_info.loc[:, 'pr_gene_symbol'].values.tolist()\
@@ -456,10 +295,8 @@ def get_ppi_features(gene_info, args):
 
     #   remove isolated nodes
     ppi_nx = ppi_nx.subgraph(common_symbols).copy()
-#    non_isol_nodes = set(ppi_nx.nodex) - set(nx.isolates(ppi_nx))
     isol_nodes = nx.isolates(ppi_nx)
     common_symbols = [x for x in common_symbols if x not in isol_nodes]
-#    ppi_nx = ppi_nx.subgraph(non_isol_nodes) 
 
     #   sort gene ids into fixed order
     common_orders = np.sort([id2order_dict[symb2id_dict[x]] for x in common_symbols])
@@ -480,8 +317,6 @@ def get_ppi_features(gene_info, args):
 
     get_gex_idxs = common_orders
 
-    print(g2v_embedding.shape)
-
     #   get adj as COO row x col form
     ppi_adj = np.array([sparse.coo_matrix(ppi_adj).row, 
                         sparse.coo_matrix(ppi_adj).col])
@@ -495,138 +330,4 @@ def get_ppi_features(gene_info, args):
         
     return gene2vecdict, gene_info, ppi_adj, ppi_nx, g2v_embedding, get_gex_idxs, args
 
-def To2class_pred(test_label, test_preds, test_probas):
-    test_2class_labels = []
-    test_2class_preds = []
-    test_2class_probas = []
-    
-    for i, x in enumerate(test_label):
-        if x == 2:
-            test_2class_labels.append(1)
-        else:
-            test_2class_labels.append(x)
-
-
-    test_probas = np.asarray(test_probas)
-    test_2class_probas = torch.softmax(torch.tensor([test_probas[:, 0], test_probas[:, 2]]).transpose(1,0), dim = 0)
-    test_2class_preds = np.argmax(test_2class_probas, axis = -1)
-    return test_2class_labels, test_2class_preds, test_2class_probas
-
-def multi_roc_auc_score(y_test, y_proba, args, average="macro"):
-    from sklearn.preprocessing import LabelBinarizer
-    lb = LabelBinarizer()
-    if args.num_classes != 2:
-        lb.fit([i for i in range(args.num_classes)])
-        y_test = lb.transform(y_test)
-    return roc_auc_score(y_test, y_proba, average=average)
-
-def multi_aupr_score(y_test, y_proba, args, average="macro"):
-    from sklearn.preprocessing import LabelBinarizer
-    lb = LabelBinarizer()
-    if args.num_classes != 2:
-        lb.fit([i for i in range(args.num_classes)])
-        y_test = lb.transform(y_test)
-    return average_precision_score(y_test, y_proba, average=average)
-
-def Print_3class_Scores(test_labels, test_preds, test_probas, test_drug_names, args):
-
-    test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg, \
-    test_drug_names_avg = Get_Drugwise_Preds(test_labels, test_preds, \
-        test_probas, test_drug_names)
-
-    print('=    '*10)
-    print("Average Test F1 Score")
-    print('macro : '+ str(f1_score(test_labels, test_preds, average = 'macro')))
-    print('micro : '+ str(f1_score(test_labels, test_preds, average = 'micro')))
-    print('weighted : '+ str(f1_score(test_labels, test_preds, average = 'weighted')))
-
-
-    print("Average Test AUROC Score")
-    print('macro : '+ str(multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'macro')))
-    print('micro : '+ str(multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'micro')))
-    print('weighted : '+ str(multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'weighted')))
-    print("Average Test AUPR Score")
-    print('macro : '+ str(multi_aupr_score(
-                        test_labels, test_probas, args, average = 'macro')))
-    print('micro : '+ str(multi_aupr_score(
-                        test_labels, test_probas, args, average = 'micro')))
-    print('weighted : '+ str(multi_aupr_score(
-                        test_labels, test_probas, args, average = 'weighted')))
-
-
-    print('=    '*10)
-    print("Drug_wise Test F1 Score")
-    print('macro : '+ str(f1_score(test_drug_labels_avg, 
-                            test_drug_preds_avg, average = 'macro')))
-    print('micro : '+ str(f1_score(test_drug_labels_avg,
-                            test_drug_preds_avg, average = 'micro')))
-    print('weighted : '+ str(f1_score(test_drug_labels_avg,
-                            test_drug_preds_avg, average = 'weighted')))
-
-    print("Drug_wise Test AUROC Score")
-    print('macro : '+ str(multi_roc_auc_score(test_drug_labels_avg, 
-                            test_drug_probas_avg, args, average = 'macro')))
-    print('micro : '+ str(multi_roc_auc_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'micro')))
-    print('weighted : '+ str(multi_roc_auc_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'weighted')))
-    print("Drug_wise Test AUPR Score")
-    print('macro : '+ str(multi_aupr_score(test_drug_labels_avg, 
-                            test_drug_probas_avg, args, average = 'macro')))
-    print('micro : '+ str(multi_aupr_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'micro')))
-    print('weighted : '+ str(multi_aupr_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'weighted')))
-
-    print('=    '*10)
-
-def Return_3class_Scores(test_labels, test_preds, test_probas, test_drug_names, args):
-
-    test_drug_labels_avg, test_drug_preds_avg, test_drug_probas_avg, \
-    test_drug_names_avg = Get_Drugwise_Preds(test_labels, test_preds, \
-        test_probas, test_drug_names)
-
-    avg_f1_macro = f1_score(test_labels, test_preds, average = 'macro')
-    avg_f1_micro = f1_score(test_labels, test_preds, average = 'micro')
-    avg_f1_weighted = f1_score(test_labels, test_preds, average = 'weighted')
-    avg_auc_macro = multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'macro')
-    avg_auc_micro = multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'micro')
-    avg_auc_weighted = multi_roc_auc_score(
-                        test_labels, test_probas, args, average = 'weighted')
-    avg_aupr_macro = multi_aupr_score(
-                        test_labels, test_probas, args, average = 'macro')
-    avg_aupr_micro = multi_aupr_score(
-                        test_labels, test_probas, args, average = 'micro')
-    avg_aupr_weighted = multi_aupr_score(
-                        test_labels, test_probas, args, average = 'weighted')
-    drug_f1_macro = f1_score(test_drug_labels_avg,
-                            test_drug_preds_avg, average = 'macro')
-    drug_f1_micro = f1_score(test_drug_labels_avg,
-                            test_drug_preds_avg, average = 'micro')
-    drug_f1_weighted = f1_score(test_drug_labels_avg,
-                            test_drug_preds_avg, average = 'weighted')
-    drug_auc_macro = multi_roc_auc_score(test_drug_labels_avg, 
-                            test_drug_probas_avg, args, average = 'macro')
-    drug_auc_micro = multi_roc_auc_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'micro')
-    drug_auc_weighted = multi_roc_auc_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'weighted')
-    drug_aupr_macro = multi_aupr_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'macro')
-    drug_aupr_micro = multi_aupr_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'micro')
-    drug_aupr_weighted = multi_aupr_score(test_drug_labels_avg,
-                            test_drug_probas_avg, args, average = 'weighted')
-
-    return [avg_f1_macro, avg_f1_micro, avg_f1_weighted,
-                            avg_auc_macro, avg_auc_micro, avg_auc_weighted,
-                            avg_aupr_macro, avg_aupr_micro, avg_aupr_weighted,
-                            drug_f1_macro, drug_f1_micro, drug_f1_weighted,
-                            drug_auc_macro, drug_auc_micro, drug_auc_weighted,
-                            drug_aupr_macro, drug_aupr_micro, drug_aupr_weighted]
 
