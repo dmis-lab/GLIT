@@ -1,4 +1,8 @@
-# TCGAnet_pf
+# GLIT: A Graph Neural Network for Drug-induced Liver Injury Prediction using Transcriptome Data
+
+- Overview & GNN achitecture of GLIT
+![model image](wordflowA.png)
+![model image](wordflowA.png)
 
 Required modules are:
 
