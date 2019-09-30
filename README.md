@@ -2,8 +2,13 @@
 
 - Overview & GNN achitecture of GLIT
 ![figure1](workflowA.png)
-
+<p align="center">
+  <b> Overall architecture of GLIT </b>
+</p>
 ![figure2](workflowB.png)
+<p align="center">
+  <b> Graph neural network architecture of GLIT </b>
+</p>
 
 Required modules are:
 
