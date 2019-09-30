@@ -1,7 +1,7 @@
 # GLIT: A Graph Neural Network for Drug-induced Liver Injury Prediction using Transcriptome Data
 
 - Overview & GNN achitecture of GLIT
-![figure1](workflowA.png){:height="50%" width="50%"}
+<p><img src='workflowA.png' alt='figure1' width='50%' height='50%'></p>
 <p align="center">
   <b> Overall architecture of GLIT </b>
 </p>
